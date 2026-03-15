@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 // Internal Models
-const Telemetry = require('./src/models/Telemetry');
+const StudentRiskLog = require('./src/models/StudentRiskLog');
 
 const app = express();
 const path = require('path');
@@ -27,13 +27,13 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://gopal123:Gopal1405M@c
 .then(() => console.log('MongoDB Connected for Telemetry Logging')).catch(err => console.error('MongoDB Connection Error:', err));
 
 
-// State variables for telemetry generation
-let altitude_mm = 10; 
-let ybco_temp_k = 77; 
-let magnetic_flux_t = 1.5; 
-let vibration_hz = 15;
+// State variables for student risk data generation
+let stress_level = 30; // 0 to 100
+let sleep_hours = 7.5; // 4 to 10
+let sentiment_score = 0.5; // -1.0 to 1.0 (Positive)
+let screen_time_hours = 4.0; // 0 to 12
 
-let telemetryBuffer = [];
+let riskBuffer = [];
 
 // Helper for generating random walk data
 const randomWalk = (value, volatility, min, max) => {
@@ -43,71 +43,72 @@ const randomWalk = (value, volatility, min, max) => {
     return next;
 };
 
-// Start high-frequency telemetry loop (200ms)
+// Start high-frequency telemetry loop (1 second updates for stability visualization)
 setInterval(() => {
-    // Simulate real-world fluctuations
-    altitude_mm = randomWalk(altitude_mm, 2, 0, 500); 
-    ybco_temp_k = randomWalk(ybco_temp_k, 0.5, 70, 100); 
-    magnetic_flux_t = randomWalk(magnetic_flux_t, 0.1, 0, 5); 
-    vibration_hz = randomWalk(vibration_hz, 5, 0, 200);
+    // Simulate real-world fluctuations in student status
+    stress_level = randomWalk(stress_level, 5, 0, 100); 
+    sleep_hours = randomWalk(sleep_hours, 0.1, 4, 10); 
+    sentiment_score = randomWalk(sentiment_score, 0.05, -1.0, 1.0); 
+    screen_time_hours = randomWalk(screen_time_hours, 0.2, 0, 12);
 
     const snapshot = {
-        altitude_mm: Number(altitude_mm.toFixed(2)),
-        ybco_temp_k: Number(ybco_temp_k.toFixed(2)),
-        magnetic_flux_t: Number(magnetic_flux_t.toFixed(2)),
-        vibration_hz: Number(vibration_hz.toFixed(2)),
+        stress_level: Number(stress_level.toFixed(2)),
+        sleep_hours: Number(sleep_hours.toFixed(2)),
+        sentiment_score: Number(sentiment_score.toFixed(3)),
+        screen_time_hours: Number(screen_time_hours.toFixed(2)),
         timestamp: new Date()
     };
 
     // Buffer for 5s logging
-    telemetryBuffer.push(snapshot);
+    riskBuffer.push(snapshot);
 
-    // AI Safety Prediction Logic
-    if (ybco_temp_k > 90) {
-        io.emit('CRITICAL_WARNING_COOLING_FAILURE', {
-            message: "EMERGENCY: CRYOGENIC COOLING FAILURE",
+    // AI Safety Prediction Logic for Mental Health
+    if (stress_level > 85 && sleep_hours < 5) {
+        io.emit('CRITICAL_RISK_INTERVENTION_REQUIRED', {
+            message: "CRITICAL ALERT: High stress and severe sleep deprivation detected.",
             data: snapshot
         });
-        // Simulate automated landing overrides
-        altitude_mm = Math.max(0, altitude_mm - 10);
+        
+        // Auto-intervention simulation (counselor notification active)
+        stress_level = Math.max(0, stress_level - 15);
+        sleep_hours += 0.5; // Student rested
     } else {
-        io.emit('telemetry_stream', snapshot);
+        io.emit('mental_health_stream', snapshot);
     }
 
-}, 200);
+}, 1000);
 
 // Background job: Average buffer and save to MongoDB every 5 seconds
 setInterval(async () => {
-    if (telemetryBuffer.length === 0) return;
+    if (riskBuffer.length === 0) return;
     
     // Create an average of the buffer
-    const avg = telemetryBuffer.reduce((acc, curr) => {
-        acc.altitude += curr.altitude_mm ?? curr.altitude; // Fallback mapping with proper zero handling
-        acc.ybco_temperature += curr.ybco_temp_k ?? curr.ybco_temperature;
-        acc.magnetic_flux += curr.magnetic_flux_t ?? curr.magnetic_flux;
+    const avg = riskBuffer.reduce((acc, curr) => {
+        acc.stress += curr.stress_level; 
+        acc.sleep += curr.sleep_hours;
+        acc.sentiment += curr.sentiment_score;
+        acc.screen += curr.screen_time_hours;
         return acc;
-    }, { altitude: 0, ybco_temperature: 0, magnetic_flux: 0 });
+    }, { stress: 0, sleep: 0, sentiment: 0, screen: 0 });
 
-    const len = telemetryBuffer.length;
-    const averagedData = new Telemetry({
-        altitude: avg.altitude / len,
-        ybco_temperature: avg.ybco_temperature / len,
-        magnetic_flux: avg.magnetic_flux / len,
-        pitch: 0,
-        roll: 0,
-        yaw: 0,
+    const len = riskBuffer.length;
+    const averagedData = new StudentRiskLog({
+        stress_level: avg.stress / len,
+        sleep_hours: avg.sleep / len,
+        sentiment_score: avg.sentiment / len,
+        screen_time_hours: avg.screen / len,
         timestamp: new Date()
     });
 
     try {
         await averagedData.save();
-        io.emit('db_log_saved', { message: `Saved ${len} points averaged data` });
+        io.emit('db_log_saved', { message: `Saved ${len} points averaged mental health data` });
     } catch(err) {
         console.error("DB Save error:", err);
     }
     
     // Clear buffer
-    telemetryBuffer = [];
+    riskBuffer = [];
 
 }, 5000);
 
@@ -120,5 +121,5 @@ app.get(/.*/, (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log(`Anti-Gravity Engine running on port ${PORT}`);
+  console.log(`Mental Health Risk Engine running on port ${PORT}`);
 });
