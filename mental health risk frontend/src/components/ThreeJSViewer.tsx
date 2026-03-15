@@ -5,10 +5,8 @@ import * as THREE from 'three';
 
 interface ViewerProps {
   telemetry: {
-    altitude: number;
-    pitch: number;
-    roll: number;
-    yaw: number;
+    altitude_mm: number;
+    vibration_hz: number;
   };
   isCritical: boolean;
 }
@@ -16,27 +14,21 @@ interface ViewerProps {
 const PayloadCylinder = ({ telemetry, isCritical }: { telemetry: ViewerProps['telemetry'], isCritical: boolean }) => {
   const meshRef = useRef<THREE.Mesh>(null);
 
-  useFrame(() => {
+  useFrame((state) => {
     if (!meshRef.current) return;
     
-    // Convert degrees to radians smoothly
-    const targetPitch = THREE.MathUtils.degToRad(telemetry.pitch);
-    const targetRoll = THREE.MathUtils.degToRad(telemetry.roll);
-    const targetYaw = THREE.MathUtils.degToRad(telemetry.yaw);
+    // Simulate some erratic rotation based on vibration_hz
+    const vibrationFactor = telemetry.vibration_hz * 0.001;
     
-    // Scale altitude roughly into 3D units (e.g., 0-500mm to 0-5 units)
-    const targetY = telemetry.altitude / 100;
-
-    // Smooth LERPing for visual stability
+    // Smooth altitude
+    const targetY = telemetry.altitude_mm / 100;
     meshRef.current.position.y = THREE.MathUtils.lerp(meshRef.current.position.y, targetY, 0.1);
     
-    // Apply euler rotations 
-    const currentEuler = meshRef.current.rotation;
-    meshRef.current.rotation.set(
-      THREE.MathUtils.lerp(currentEuler.x, targetPitch, 0.1),
-      THREE.MathUtils.lerp(currentEuler.y, targetYaw, 0.1),
-      THREE.MathUtils.lerp(currentEuler.z, targetRoll, 0.1)
-    );
+    meshRef.current.rotation.x += (Math.random() - 0.5) * vibrationFactor;
+    meshRef.current.rotation.z += (Math.random() - 0.5) * vibrationFactor;
+
+    // Slow spin
+    meshRef.current.rotation.y += 0.01;
   });
 
   return (

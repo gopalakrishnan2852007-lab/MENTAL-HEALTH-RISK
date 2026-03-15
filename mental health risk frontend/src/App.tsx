@@ -9,15 +9,13 @@ import ThreeJSViewer from "./components/ThreeJSViewer";
 import TelemetryChart from "./components/TelemetryChart";
 
 // Assuming we run backend locally on 10000 for this project
-const API = "https://mental-health-risk.onrender.com";
+const API = window.location.hostname === "localhost" ? "http://localhost:10000" : "";
 
 interface TelemetryData {
-  altitude: number;
-  ybco_temperature: number;
-  magnetic_flux: number;
-  pitch: number;
-  roll: number;
-  yaw: number;
+  altitude_mm: number;
+  ybco_temp_k: number;
+  magnetic_flux_t: number;
+  vibration_hz: number;
   timestamp: string;
 }
 
@@ -47,15 +45,15 @@ export default function App() {
         const timeStr = new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 1 });
         const latest = {
           time: timeStr,
-          altitude: data.altitude,
-          magnetic_flux: data.magnetic_flux
+          altitude: data.altitude_mm,
+          magnetic_flux: data.magnetic_flux_t
         };
         const updated = [...prev, latest];
         return updated.length > 50 ? updated.slice(updated.length - 50) : updated;
       });
     });
 
-    socket.on('CRITICAL_FAILURE_INITIATE_LANDING', (payload) => {
+    socket.on('CRITICAL_WARNING_COOLING_FAILURE', (payload) => {
       setIsCritical(true);
       setCriticalMsg(payload.message);
       setTelemetry(payload.data); // Update with final data point
@@ -105,53 +103,45 @@ export default function App() {
                 <div className="bg-[#020617]/50 p-3 rounded-lg border border-[#1e293b] relative overflow-hidden group hover:border-cyan-500/30 transition-colors">
                   <div className="flex justify-between items-end mb-1 relative z-10">
                     <span className="text-xs text-slate-500 font-bold uppercase flex items-center gap-1"><Compass className="w-3 h-3 text-cyan-500"/> Altitude</span>
-                    <span className="text-xl font-mono text-white">{formatVal(telemetry.altitude)}<span className="text-xs text-slate-500 ml-1">mm</span></span>
+                    <span className="text-xl font-mono text-white">{formatVal(telemetry.altitude_mm)}<span className="text-xs text-slate-500 ml-1">mm</span></span>
                   </div>
                   {/* Visual Bar */}
                   <div className="w-full h-1 bg-slate-800 rounded-full mt-2 overflow-hidden relative z-10">
-                    <div className="h-full bg-cyan-400" style={{ width: `${Math.min(100, (telemetry.altitude / 500) * 100)}%` }}></div>
+                    <div className="h-full bg-cyan-400" style={{ width: `${Math.min(100, (telemetry.altitude_mm / 500) * 100)}%` }}></div>
                   </div>
                 </div>
 
                 <div className="bg-[#020617]/50 p-3 rounded-lg border border-[#1e293b] relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
                   <div className="flex justify-between items-end mb-1 relative z-10">
                     <span className="text-xs text-slate-500 font-bold uppercase flex items-center gap-1"><Zap className="w-3 h-3 text-emerald-500"/> Mag. Flux</span>
-                    <span className="text-xl font-mono text-white">{formatVal(telemetry.magnetic_flux, 2)}<span className="text-xs text-slate-500 ml-1">T</span></span>
+                    <span className="text-xl font-mono text-white">{formatVal(telemetry.magnetic_flux_t, 2)}<span className="text-xs text-slate-500 ml-1">T</span></span>
                   </div>
                   {/* Visual Bar */}
                   <div className="w-full h-1 bg-slate-800 rounded-full mt-2 overflow-hidden relative z-10">
-                     <div className="h-full bg-emerald-400" style={{ width: `${Math.min(100, (telemetry.magnetic_flux / 5) * 100)}%` }}></div>
+                     <div className="h-full bg-emerald-400" style={{ width: `${Math.min(100, (telemetry.magnetic_flux_t / 5) * 100)}%` }}></div>
                   </div>
                 </div>
 
-                <div className={`bg-[#020617]/50 p-3 rounded-lg border relative overflow-hidden transition-colors ${telemetry.ybco_temperature > 85 ? 'border-red-500/50' : 'border-[#1e293b]'}`}>
+                <div className={`bg-[#020617]/50 p-3 rounded-lg border relative overflow-hidden transition-colors ${telemetry.ybco_temp_k > 85 ? 'border-red-500/50' : 'border-[#1e293b]'}`}>
                   <div className="flex justify-between items-end mb-1 relative z-10">
-                    <span className={`text-xs font-bold uppercase flex items-center gap-1 ${telemetry.ybco_temperature > 85 ? 'text-red-400' : 'text-slate-500'}`}><Thermometer className="w-3 h-3"/> YBCO Temp</span>
-                    <span className={`text-xl font-mono ${telemetry.ybco_temperature > 85 ? 'text-red-400' : 'text-white'}`}>{formatVal(telemetry.ybco_temperature)}<span className="text-xs opacity-50 ml-1">K</span></span>
+                    <span className={`text-xs font-bold uppercase flex items-center gap-1 ${telemetry.ybco_temp_k > 85 ? 'text-red-400' : 'text-slate-500'}`}><Thermometer className="w-3 h-3"/> YBCO Temp</span>
+                    <span className={`text-xl font-mono ${telemetry.ybco_temp_k > 85 ? 'text-red-400' : 'text-white'}`}>{formatVal(telemetry.ybco_temp_k)}<span className="text-xs opacity-50 ml-1">K</span></span>
                   </div>
                   {/* Visual Bar */}
                   <div className="w-full h-1 bg-slate-800 rounded-full mt-2 overflow-hidden relative z-10">
-                     <div className={`h-full ${telemetry.ybco_temperature > 90 ? 'bg-red-500 animate-pulse' : telemetry.ybco_temperature > 80 ? 'bg-amber-400' : 'bg-cyan-500'}`} style={{ width: `${Math.min(100, (telemetry.ybco_temperature / 120) * 100)}%` }}></div>
+                     <div className={`h-full ${telemetry.ybco_temp_k > 90 ? 'bg-red-500 animate-pulse' : telemetry.ybco_temp_k > 80 ? 'bg-amber-400' : 'bg-cyan-500'}`} style={{ width: `${Math.min(100, (telemetry.ybco_temp_k / 120) * 100)}%` }}></div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Orientation */}
+            {/* Orientation / Vibration */}
             <div className="mt-8">
               <h3 className="text-[10px] font-mono text-cyan-600 uppercase tracking-widest mb-3">Gyroscopic State</h3>
-              <div className="grid grid-cols-3 gap-2 text-center font-mono">
-                <div className="bg-[#020617] border border-[#1e293b] p-2 rounded">
-                  <div className="text-[9px] text-slate-500 mb-1">PITCH</div>
-                  <div className="text-sm text-cyan-300">{formatVal(telemetry.pitch)}°</div>
-                </div>
-                <div className="bg-[#020617] border border-[#1e293b] p-2 rounded">
-                  <div className="text-[9px] text-slate-500 mb-1">ROLL</div>
-                  <div className="text-sm text-emerald-300">{formatVal(telemetry.roll)}°</div>
-                </div>
-                <div className="bg-[#020617] border border-[#1e293b] p-2 rounded">
-                  <div className="text-[9px] text-slate-500 mb-1">YAW</div>
-                  <div className="text-sm text-indigo-300">{formatVal(telemetry.yaw)}°</div>
+              <div className="grid grid-cols-1 gap-2 text-center font-mono">
+                <div className="bg-[#020617] border border-[#1e293b] p-3 rounded flex justify-between items-center">
+                  <div className="text-[10px] text-slate-500 font-bold tracking-widest">VIBRATION</div>
+                  <div className="text-lg text-indigo-300">{formatVal(telemetry.vibration_hz)}<span className="text-xs ml-1 opacity-50">Hz</span></div>
                 </div>
               </div>
             </div>
@@ -169,12 +159,12 @@ export default function App() {
               {isCritical ? (
                 <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/30 px-4 py-1.5 rounded text-red-400 font-bold tracking-widest text-sm uppercase animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.5)]">
                   <AlertTriangle className="w-4 h-4" />
-                  CRITICAL - COOLING / STABILITY FAILURE
+                  EMERGENCY: CRYOGENIC COOLING FAILURE
                 </div>
               ) : (
                 <div className="flex items-center gap-3 bg-cyan-500/10 border border-cyan-500/30 px-4 py-1.5 rounded text-cyan-400 font-bold tracking-widest text-sm uppercase">
                   <ShieldCheck className="w-4 h-4" />
-                  STABLE LEVITATION
+                  SYSTEM STABLE: QUANTUM LOCKING ACTIVE
                 </div>
               )}
            </div>
@@ -213,12 +203,12 @@ export default function App() {
                 </h2>
               </div>
               <div className="flex-1 w-full relative">
-                  <ThreeJSViewer telemetry={{ altitude: telemetry.altitude, pitch: telemetry.pitch, roll: telemetry.roll, yaw: telemetry.yaw }} isCritical={isCritical} />
+                  <ThreeJSViewer telemetry={{ altitude_mm: telemetry.altitude_mm, vibration_hz: telemetry.vibration_hz }} isCritical={isCritical} />
               </div>
               {/* HUD Overlay Elements */}
               <div className="absolute right-4 bottom-4 text-right pointer-events-none p-2 border border-[#1e293b] bg-[#020617]/50 rounded backdrop-blur font-mono">
                  <div className="text-[10px] text-slate-500">Z-AXIS DISPLACEMENT</div>
-                 <div className={`text-xl font-bold ${isCritical ? 'text-red-400' : 'text-blue-400'}`}>+{formatVal(telemetry.altitude, 1)}<span className="text-xs ml-1 font-normal opacity-50">mm</span></div>
+                 <div className={`text-xl font-bold ${isCritical ? 'text-red-400' : 'text-blue-400'}`}>+{formatVal(telemetry.altitude_mm, 1)}<span className="text-xs ml-1 font-normal opacity-50">mm</span></div>
               </div>
             </div>
 

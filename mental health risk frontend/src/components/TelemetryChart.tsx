@@ -10,12 +10,12 @@ interface HoverProps {
 }
 
 const CustomTooltip = ({ active, payload, label }: HoverProps) => {
-  if (active && payload && payload.length) {
+  if (active && payload && payload.length >= 2) {
     return (
       <div className="bg-slate-900 border border-cyan-700/50 p-3 rounded-lg shadow-lg font-mono text-xs">
         <p className="text-slate-300 mb-1">{`T-${label}`}</p>
-        <p className="text-cyan-400 font-bold">{`Flux: ${payload[0].value.toFixed(2)} T`}</p>
-        <p className="text-emerald-400 font-bold">{`Alt: ${payload[1].value.toFixed(1)} mm`}</p>
+        <p className="text-cyan-400 font-bold">{`Flux: ${(payload[0]?.value ?? 0).toFixed(2)} T`}</p>
+        <p className="text-emerald-400 font-bold">{`Alt: ${(payload[1]?.value ?? 0).toFixed(1)} mm`}</p>
       </div>
     );
   }

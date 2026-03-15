@@ -30,12 +30,10 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/antigravi
 
 
 // State variables for telemetry generation
-let altitude = 10; // mm
-let ybco_temperature = 77; // Kelvin
-let magnetic_flux = 1.5; // Tesla
-let pitch = 0;
-let roll = 0;
-let yaw = 0;
+let altitude_mm = 10; 
+let ybco_temp_k = 77; 
+let magnetic_flux_t = 1.5; 
+let vibration_hz = 15;
 
 let telemetryBuffer = [];
 
@@ -47,23 +45,19 @@ const randomWalk = (value, volatility, min, max) => {
     return next;
 };
 
-// Start high-frequency telemetry loop (100ms)
+// Start high-frequency telemetry loop (200ms)
 setInterval(() => {
     // Simulate real-world fluctuations
-    altitude = randomWalk(altitude, 2, 0, 500); // Elevate up to 500mm
-    ybco_temperature = randomWalk(ybco_temperature, 0.5, 70, 100); // 77K is optimal, >90K is dangerous
-    magnetic_flux = randomWalk(magnetic_flux, 0.1, 0, 5); // 0 to 5 Tesla
-    pitch = randomWalk(pitch, 1, -45, 45); // Degrees
-    roll = randomWalk(roll, 1, -45, 45);
-    yaw = randomWalk(yaw, 2, -180, 180);
+    altitude_mm = randomWalk(altitude_mm, 2, 0, 500); 
+    ybco_temp_k = randomWalk(ybco_temp_k, 0.5, 70, 100); 
+    magnetic_flux_t = randomWalk(magnetic_flux_t, 0.1, 0, 5); 
+    vibration_hz = randomWalk(vibration_hz, 5, 0, 200);
 
     const snapshot = {
-        altitude: Number(altitude.toFixed(2)),
-        ybco_temperature: Number(ybco_temperature.toFixed(2)),
-        magnetic_flux: Number(magnetic_flux.toFixed(2)),
-        pitch: Number(pitch.toFixed(2)),
-        roll: Number(roll.toFixed(2)),
-        yaw: Number(yaw.toFixed(2)),
+        altitude_mm: Number(altitude_mm.toFixed(2)),
+        ybco_temp_k: Number(ybco_temp_k.toFixed(2)),
+        magnetic_flux_t: Number(magnetic_flux_t.toFixed(2)),
+        vibration_hz: Number(vibration_hz.toFixed(2)),
         timestamp: new Date()
     };
 
@@ -71,23 +65,18 @@ setInterval(() => {
     telemetryBuffer.push(snapshot);
 
     // AI Safety Prediction Logic
-    // If temp > 90K or vibration (pitch/roll magnitude) > 30 degrees
-    const vibrationMagnitude = Math.sqrt(pitch * pitch + roll * roll);
-    
-    if (ybco_temperature > 90 || vibrationMagnitude > 30) {
-        io.emit('CRITICAL_FAILURE_INITIATE_LANDING', {
-            message: "EMERGENCY: Cooling failure or high instability detected. Initiating automated landing sequence.",
+    if (ybco_temp_k > 90) {
+        io.emit('CRITICAL_WARNING_COOLING_FAILURE', {
+            message: "EMERGENCY: CRYOGENIC COOLING FAILURE",
             data: snapshot
         });
         // Simulate automated landing overrides
-        altitude = Math.max(0, altitude - 10);
-        pitch *= 0.8;
-        roll *= 0.8;
+        altitude_mm = Math.max(0, altitude_mm - 10);
     } else {
         io.emit('telemetry_stream', snapshot);
     }
 
-}, 100);
+}, 200);
 
 // Background job: Average buffer and save to MongoDB every 5 seconds
 setInterval(async () => {
@@ -95,23 +84,20 @@ setInterval(async () => {
     
     // Create an average of the buffer
     const avg = telemetryBuffer.reduce((acc, curr) => {
-        acc.altitude += curr.altitude;
-        acc.ybco_temperature += curr.ybco_temperature;
-        acc.magnetic_flux += curr.magnetic_flux;
-        acc.pitch += curr.pitch;
-        acc.roll += curr.roll;
-        acc.yaw += curr.yaw;
+        acc.altitude += curr.altitude_mm ?? curr.altitude; // Fallback mapping with proper zero handling
+        acc.ybco_temperature += curr.ybco_temp_k ?? curr.ybco_temperature;
+        acc.magnetic_flux += curr.magnetic_flux_t ?? curr.magnetic_flux;
         return acc;
-    }, { altitude: 0, ybco_temperature: 0, magnetic_flux: 0, pitch: 0, roll: 0, yaw: 0 });
+    }, { altitude: 0, ybco_temperature: 0, magnetic_flux: 0 });
 
     const len = telemetryBuffer.length;
     const averagedData = new Telemetry({
         altitude: avg.altitude / len,
         ybco_temperature: avg.ybco_temperature / len,
         magnetic_flux: avg.magnetic_flux / len,
-        pitch: avg.pitch / len,
-        roll: avg.roll / len,
-        yaw: avg.yaw / len,
+        pitch: 0,
+        roll: 0,
+        yaw: 0,
         timestamp: new Date()
     });
 
@@ -130,7 +116,7 @@ setInterval(async () => {
 
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.
-app.get('*', (req, res) => {
+app.get('/*', (req, res) => {
     res.sendFile(path.join(__dirname, '../../mental health risk frontend/dist/index.html'));
 });
 
