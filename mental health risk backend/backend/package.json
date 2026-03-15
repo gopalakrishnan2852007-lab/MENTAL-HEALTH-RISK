@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npm install --prefix \"../../mental health risk frontend\" && npm run build --prefix \"../../mental health risk frontend\"",
     "start": "node server.js",
     "dev": "node server.js"
   },
