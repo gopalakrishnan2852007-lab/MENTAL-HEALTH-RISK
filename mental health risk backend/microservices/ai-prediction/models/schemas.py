@@ -1,26 +1,17 @@
 from pydantic import BaseModel
-from typing import Literal, Optional
+from typing import Literal, List, Optional
 
-class EnvironmentalData(BaseModel):
-    location_id: int
-    rainfall: float
-    temperature: float
-    humidity: float
-    wind_speed: float
-    soil_moisture: float
-    river_level: float
-    vegetation_dryness: float
+class StudentBehavioralData(BaseModel):
+    student_id: str
+    stress_level: float
+    sleep_hours: float
+    sentiment_score: float
+    screen_time_hours: float
 
-class SimulationData(BaseModel):
-    rainfall_multiplier: float = 1.0
-    river_level_multiplier: float = 1.0
-
-class RiskPredictionResponse(BaseModel):
-    flood_probability: float
-    landslide_probability: float
-    storm_surge_probability: float
-    risk_level: Literal["safe", "moderate", "high", "critical"]
+class MentalHealthRiskResponse(BaseModel):
     risk_score: float
-    prediction_6h: str
-    prediction_24h: str
-    confidence: float
+    risk_level: Literal["LOW", "MODERATE", "HIGH"]
+    confidence_score: float
+    ai_explanation: List[str]
+    recommendations: List[str]
+    sentiment_trend: str

@@ -4,13 +4,13 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const axios = require('axios');
+const path = require('path');
 
 // Internal Models
 const StudentRiskLog = require('./src/models/StudentRiskLog');
 
 const app = express();
-const path = require('path');
-
 app.use(cors());
 app.use(express.json());
 
@@ -23,11 +23,12 @@ const io = new Server(server, {
 });
 
 // Database Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://gopal123:Gopal1405M@cluster0.qiw5207.mongodb.net/antigravity?appName=Cluster0')
-.then(() => console.log('MongoDB Connected for Telemetry Logging')).catch(err => console.error('MongoDB Connection Error:', err));
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://gopal123:Gopal1405M@cluster0.qiw5207.mongodb.net/antigravity?appName=Cluster0';
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('MongoDB Connected for MindGuard Telemetry'))
+  .catch(err => console.error('MongoDB Connection Error:', err));
 
-
-// Multi-Student Simulation State
+// Simulation State
 let students = [
   { student_id: 'S001', name: 'Alex Johnson', major: 'Computer Science', year: 'Junior', stress_level: 40, sleep_hours: 7.0, sentiment_score: 0.6, screen_time_hours: 5.0 },
   { student_id: 'S002', name: 'Maria Garcia', major: 'Biology', year: 'Sophomore', stress_level: 65, sleep_hours: 5.5, sentiment_score: -0.2, screen_time_hours: 8.0 },
@@ -37,140 +38,130 @@ let students = [
 ];
 
 let riskBuffer = [];
+const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8000';
 
-// Helper for generating random walk data
+// API Endpoints
+app.post('/api/checkin', async (req, res) => {
+    const { student_id, stress_level, mood, journal } = req.body;
+    
+    const studentIdx = students.findIndex(s => s.student_id === student_id);
+    if (studentIdx === -1) return res.status(404).json({ error: 'Student not found' });
+
+    console.log(`[Check-in] Received data for student ${student_id}`);
+
+    // Update simulation state based on check-in
+    // If mood is 'low', sentiment drops. If 'high', sentiment rises.
+    if (mood === 'low') students[studentIdx].sentiment_score = Math.max(-1, students[studentIdx].sentiment_score - 0.3);
+    if (mood === 'high') students[studentIdx].sentiment_score = Math.min(1, students[studentIdx].sentiment_score + 0.3);
+    
+    // Manually set stress if provided
+    if (stress_level) students[studentIdx].stress_level = stress_level * 10; // 1-10 to 0-100 scale
+
+    // Trigger immediate AI re-evaluation
+    try {
+        const response = await axios.post(`${AI_MICROSERVICE_URL}/predict_risk`, {
+            student_id: students[studentIdx].student_id,
+            stress_level: students[studentIdx].stress_level,
+            sleep_hours: students[studentIdx].sleep_hours,
+            sentiment_score: students[studentIdx].sentiment_score,
+            screen_time_hours: students[studentIdx].screen_time_hours
+        });
+
+        const assessment = response.data;
+        res.json({ message: 'Check-in processed', assessment });
+    } catch (error) {
+        console.error('AI Microservice Error during check-in:', error.message);
+        res.status(500).json({ error: 'AI evaluation failed' });
+    }
+});
+
+// Telemetry Logic
 const randomWalk = (value, volatility, min, max) => {
     let next = value + (Math.random() - 0.5) * volatility;
-    if (next < min) next = min;
-    if (next > max) next = max;
-    return next;
+    return Math.min(max, Math.max(min, next));
 };
 
-// AI Engine Functions
-const calculateRiskScore = (student) => {
-  let score = 0;
-  // Stress (0-100)
-  score += student.stress_level * 0.4;
-  // Sleep (opposite impact, 4 is worst, 10 is best)
-  score += Math.max(0, (8 - student.sleep_hours) * 10) * 0.3;
-  // Sentiment (-1 to 1) -> map -1 to 100 penalty, 1 to 0
-  score += ((1 - student.sentiment_score) / 2 * 100) * 0.2;
-  // Screen time (above 4 adds risk)
-  score += Math.max(0, (student.screen_time_hours - 4) * 5) * 0.1;
-
-  score = Math.min(100, Math.max(0, score));
-  
-  let risk_level = 'LOW';
-  if (score > 75) risk_level = 'HIGH';
-  else if (score > 45) risk_level = 'MODERATE';
-
-  // Confidence is a simulated metric of model certainty
-  const confidence_score = 85 + Math.random() * 10;
-
-  return { risk_score: score, risk_level, confidence_score };
-};
-
-const generateXAI = (student, score) => {
-  let explanations = [];
-  if (student.stress_level > 70) explanations.push(`Stress level significantly elevated (${student.stress_level.toFixed(1)}/100).`);
-  if (student.sleep_hours < 6) explanations.push(`Sleep duration critically low (${student.sleep_hours.toFixed(1)} hrs).`);
-  if (student.sentiment_score < 0) explanations.push(`Negative sentiment patterns detected in digital communication.`);
-  if (student.screen_time_hours > 8) explanations.push(`Excessive digital screen exposure (${student.screen_time_hours.toFixed(1)} hrs).`);
-  
-  if (explanations.length === 0) explanations.push("Behavioral metrics are within healthy baseline ranges.");
-  
-  return explanations;
-};
-
-const getRecommendations = (risk_level) => {
-  if (risk_level === 'HIGH') return ["Schedule Immediate Counselor Check-in", "Trigger Wellness Check", "Send automated soothing exercises"];
-  if (risk_level === 'MODERATE') return ["Recommend Mindfulness Activity", "Suggest limiting screen time before bed", "Check in via Wellness Chatbot"];
-  return ["Maintain healthy routines", "Encourage group study activities"];
-};
-
-// Start high-frequency telemetry loop (1 second updates for stability visualization)
-setInterval(() => {
+async function broadcastUpdates() {
     let currentSnapshots = [];
 
-    students.forEach((student, index) => {
-      // Simulate real-world fluctuations in student status
-      student.stress_level = randomWalk(student.stress_level, 3, 0, 100); 
-      student.sleep_hours = randomWalk(student.sleep_hours, 0.05, 3, 11); 
-      student.sentiment_score = randomWalk(student.sentiment_score, 0.05, -1.0, 1.0); 
-      student.screen_time_hours = randomWalk(student.screen_time_hours, 0.1, 0, 14);
+    for (const student of students) {
+        // Natural fluctuations
+        student.stress_level = randomWalk(student.stress_level, 2, 0, 100);
+        student.sleep_hours = randomWalk(student.sleep_hours, 0.05, 3, 11);
+        student.sentiment_score = randomWalk(student.sentiment_score, 0.05, -1, 1);
+        student.screen_time_hours = randomWalk(student.screen_time_hours, 0.1, 0, 14);
 
-      const aiAnalysis = calculateRiskScore(student);
-      const explanations = generateXAI(student, aiAnalysis.risk_score);
-      const recommendations = getRecommendations(aiAnalysis.risk_level);
+        try {
+            // Call AI Microservice for accurate prediction
+            const response = await axios.post(`${AI_MICROSERVICE_URL}/predict_risk`, {
+                student_id: student.student_id,
+                stress_level: student.stress_level,
+                sleep_hours: student.sleep_hours,
+                sentiment_score: student.sentiment_score,
+                screen_time_hours: student.screen_time_hours
+            });
 
-      const snapshot = {
-          ...student,
-          stress_level: Number(student.stress_level.toFixed(2)),
-          sleep_hours: Number(student.sleep_hours.toFixed(2)),
-          sentiment_score: Number(student.sentiment_score.toFixed(3)),
-          screen_time_hours: Number(student.screen_time_hours.toFixed(2)),
-          risk_score: Number(aiAnalysis.risk_score.toFixed(1)),
-          confidence_score: Number(aiAnalysis.confidence_score.toFixed(1)),
-          risk_level: aiAnalysis.risk_level,
-          ai_explanation: explanations,
-          recommendations: recommendations,
-          timestamp: new Date()
-      };
+            const ai = response.data;
+            const snapshot = {
+                ...student,
+                risk_score: ai.risk_score,
+                risk_level: ai.risk_level,
+                confidence_score: ai.confidence_score,
+                ai_explanation: ai.ai_explanation,
+                recommendations: ai.recommendations,
+                timestamp: new Date()
+            };
 
-      currentSnapshots.push(snapshot);
-      riskBuffer.push(snapshot);
+            currentSnapshots.push(snapshot);
+            riskBuffer.push(snapshot);
 
-      // AI Safety Prediction Logic for Mental Health
-      if (snapshot.risk_level === 'HIGH' && Math.random() > 0.8) {
-          io.emit('CRITICAL_RISK_INTERVENTION_REQUIRED', {
-              message: `CRITICAL ALERT: High risk detected for ${student.name}.`,
-              data: snapshot
-          });
-          
-          // Auto-intervention simulation (counselor notification active)
-          student.stress_level = Math.max(0, student.stress_level - 5); // Reduces stress slightly due to intervention
-      }
-    });
-
-    // Sort by risk score descending
-    currentSnapshots.sort((a,b) => b.risk_score - a.risk_score);
-
-    // Broadcast the full counselor dashboard view
-    io.emit('counselor_dashboard_stream', currentSnapshots);
-    
-    // For legacy compat or specific chosen student focus, just emit the first most-at-risk
-    if (currentSnapshots.length > 0) {
-      io.emit('mental_health_stream', currentSnapshots[0]);
+            // Alert logic
+            if (snapshot.risk_level === 'HIGH' && Math.random() > 0.9) {
+                io.emit('CRITICAL_RISK_INTERVENTION_REQUIRED', {
+                    message: `CRITICAL ALERT: High risk detected for ${student.name}.`,
+                    data: snapshot
+                });
+            }
+        } catch (err) {
+            // Fallback if microservice is down
+            console.warn(`[AI SERVICE DOWN] Using fallback local logic for ${student.name}`);
+            currentSnapshots.push({
+                ...student,
+                risk_score: 50,
+                risk_level: 'MODERATE',
+                ai_explanation: ["Connect with internal sensor logic..."],
+                recommendations: ["Ensure AI microservice is active"],
+                timestamp: new Date()
+            });
+        }
     }
 
-}, 1500);
+    currentSnapshots.sort((a, b) => b.risk_score - a.risk_score);
+    io.emit('counselor_dashboard_stream', currentSnapshots);
+}
 
-// Background job: Average buffer and save to MongoDB every 10 seconds
+// 2-second broadcast interval
+setInterval(broadcastUpdates, 2000);
+
+// Data persistence every 30s
 setInterval(async () => {
     if (riskBuffer.length === 0) return;
-    
-    const bufferToSave = [...riskBuffer];
-    riskBuffer = []; // Clear buffer
-
-    // In a real app we'd average per student, but for demo we just save the latest snapshots
-    // Or we save everything (bulk insert)
+    const toSave = [...riskBuffer];
+    riskBuffer = [];
     try {
-        await StudentRiskLog.insertMany(bufferToSave);
-        io.emit('db_log_saved', { message: `Saved ${bufferToSave.length} points of multi-student mental health data` });
-    } catch(err) {
-        console.error("DB Save error:", err);
+        await StudentRiskLog.insertMany(toSave);
+        console.log(`[DB] Saved ${toSave.length} records`);
+    } catch (err) {
+        console.error('[DB ERROR]', err.message);
     }
-    
-}, 10000);
+}, 30000);
 
-
-// The "catchall" handler: for any request that doesn't
-// match one above, send back React's index.html file.
+// Catch-all route to serve the Single Page Application
 app.get(/.*/, (req, res) => {
     res.sendFile(path.join(__dirname, '../../mental health risk frontend/dist/index.html'));
 });
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log(`MindGuard AI Risk Engine running on port ${PORT}`);
+    console.log(`MindGuard AI Risk Engine running on port ${PORT}`);
 });
