@@ -8,8 +8,8 @@ import {
 import ThreeJSViewer from "./components/ThreeJSViewer";
 import TelemetryChart from "./components/TelemetryChart";
 
-// Assuming we run backend locally on 10000 for this project
-const API = window.location.hostname === "localhost" ? "http://localhost:10000" : "";
+// Explicitly point frontend socket connection to the Render backend URL
+const API = "https://mental-health-risk.onrender.com/";
 
 interface TelemetryData {
   altitude_mm: number;
