@@ -12,7 +12,7 @@ import CommunityReportModal from "./components/CommunityReportModal";
 import NewsTicker from "./components/NewsTicker";
 
 // Dynamic API detection
-const API = "http://localhost:10000";
+const API = "https://mental-health-risk.onrender.com";
 
 interface StudentData {
   student_id: number;

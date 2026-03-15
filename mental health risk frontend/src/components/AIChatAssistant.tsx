@@ -15,7 +15,7 @@ export default function AIChatAssistant() {
   const [isTyping, setIsTyping] = useState(false);
 
   // Dynamic API detection
-  const API = "http://localhost:10000";
+  const API = "https://mental-health-risk.onrender.com";
 
   const handleSend = async () => {
     if (!inputValue.trim()) return;
