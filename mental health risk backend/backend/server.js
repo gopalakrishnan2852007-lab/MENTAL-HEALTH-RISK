@@ -23,10 +23,8 @@ const io = new Server(server, {
 });
 
 // Database Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/antigravity', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => console.log('MongoDB Connected for Telemetry Logging')).catch(err => console.error('MongoDB Connection Error:', err));
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://gopal123:Gopal1405M@cluster0.qiw5207.mongodb.net/antigravity?appName=Cluster0')
+.then(() => console.log('MongoDB Connected for Telemetry Logging')).catch(err => console.error('MongoDB Connection Error:', err));
 
 
 // State variables for telemetry generation
